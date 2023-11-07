@@ -826,6 +826,13 @@ public:
     QLinearMatMulHelper(const Info_t& info, const Shape_t& shape) : MatMulHelperBase(info, shape, 0, 3) {}
 };
 
+class MatMulIntegerToFloatHelper : public MatMulHelperBase
+{
+public:
+    template<typename Info_t, typename Shape_t>
+    MatMulIntegerToFloatHelper(const Info_t& info, const Shape_t& shape) : MatMulHelperBase(info, shape, 0, 1) {}
+};
+
 
 class TopKHelper
 {
@@ -1727,6 +1734,7 @@ using ShapeInferenceHelper_Identity14 = GetOutputShapeAsInputShapeHelper;
 using ShapeInferenceHelper_Identity16 = GetOutputShapeAsInputShapeHelper;
 using ShapeInferenceHelper_MatMul = MatMulHelper;
 using ShapeInferenceHelper_MatMulInteger = MatMulHelper;
+using ShapeInferenceHelper_MatMulIntegerToFloat = MatMulIntegerToFloatHelper;
 using ShapeInferenceHelper_QLinearMatMul = QLinearMatMulHelper;
 using ShapeInferenceHelper_QLinearAdd = GetBroadcastedOutputShapeHelper;
 using ShapeInferenceHelper_DynamicQuantizeLinear = GetOutputShapeAsInputShapeHelper;
