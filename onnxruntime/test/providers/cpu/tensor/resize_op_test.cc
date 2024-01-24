@@ -1827,7 +1827,8 @@ template <typename T, typename T1 = int64_t>
 void TestAntialiasing(std::map<std::string, std::string> attributes,
                       std::vector<int64_t> input_shape,
                       std::vector<T> input_data,
-                      std::vector<T1> output_shape_or_scale, std::vector<T> output_data) {
+                      std::vector<T1> output_shape_or_scale, std::vector<T> output_data,
+                      gsl::span<std::string_view> excluded_ep = {}) {
   auto parse_attr = [](const std::string& str, auto typed_v) {
     using Tdata = decltype(typed_v);
     std::vector<Tdata> vect;
@@ -1891,8 +1892,12 @@ void TestAntialiasing(std::map<std::string, std::string> attributes,
   }
 
   test.AddOutput<T>("Y", output_shape, output_data);
-  // TensorRT 8.5 supports operators up to Opset 17. Temporarily exclude TensorRT EP due to accurarcy issue.
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
+
+  std::unordered_set<std::string> excluded_eps(excluded_ep.begin(), excluded_ep.end());
+  // TensorRT 8.5 supports operators up to Opset 17. Temporarily exclude TensorRT EP due to accuracy issue.
+  excluded_eps.insert(kTensorrtExecutionProvider);
+
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", excluded_eps);
 }
 
 TEST(ResizeOpTest, Antialias_Bilinear_No_ExcludeOutside) {
@@ -1982,7 +1987,10 @@ TEST(ResizeOpTest, Antialias_NhwcBilinear) {
                           33.5f, 73.5f, 113.5f,
                           35.074074f, 75.07407f, 115.07407f,
                           36.590908f, 76.59091f, 116.59091f};
-  TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 5, 8, 3}, X, {1, 4, 5, 3}, Y);
+
+  // Nchw is not supported by CUDA Resize implementation
+  InlinedVector<std::string_view> excluded_eps = {kCudaExecutionProvider};
+  TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 5, 8, 3}, X, {1, 4, 5, 3}, Y, excluded_eps);
 }
 
 TEST(ResizeOpTest, Antialias_NhwcBilinear_dtype) {
@@ -1992,7 +2000,8 @@ TEST(ResizeOpTest, Antialias_NhwcBilinear_dtype) {
     std::vector<uint8_t> Y = {1, 3, 4,
                               6, 8, 9,
                               11, 13, 14};
-    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 4, 4, 1}, X, {1, 3, 3, 1}, Y);
+    InlinedVector<std::string_view> excluded_eps = {kCudaExecutionProvider};
+    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 4, 4, 1}, X, {1, 3, 3, 1}, Y, excluded_eps);
   }
   {
     std::vector<int8_t> X(16);
@@ -2008,7 +2017,8 @@ TEST(ResizeOpTest, Antialias_NhwcBilinear_dtype) {
     std::vector<int32_t> Y = {1, 3, 4,
                               6, 8, 9,
                               11, 13, 14};
-    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 4, 4, 1}, X, {1, 3, 3, 1}, Y);
+    InlinedVector<std::string_view> excluded_eps = {kCudaExecutionProvider};
+    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 4, 4, 1}, X, {1, 3, 3, 1}, Y, excluded_eps);
   }
 }
 
@@ -2040,11 +2050,13 @@ TEST(ResizeOpTest, Antialias_Trilinear_Scale_Is_11s_and_1s1) {
   if (DefaultDmlExecutionProvider().get() != nullptr) {
     GTEST_SKIP() << "Skipping because dml implementation of antialias is slightly different and doesn't match in all cases.";
   }
+
+  InlinedVector<std::string_view> excluded_eps = {kCudaExecutionProvider};
   std::vector<float> X(16 * 4 * 4);
   std::iota(X.begin(), X.end(), 0.f);
   {
     std::vector<float> Y = X;
-    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {4, 1, 4, 4, 4}, X, {4, 1, 4, 4, 4}, Y);
+    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {4, 1, 4, 4, 4}, X, {4, 1, 4, 4, 4}, Y, excluded_eps);
   }
   {
     std::vector<float> Y = {0.625f, 2.375f, 4.625f, 6.375f, 8.625f, 10.375f, 12.625f,
@@ -2066,7 +2078,7 @@ TEST(ResizeOpTest, Antialias_Trilinear_Scale_Is_11s_and_1s1) {
                             224.625f, 226.375f, 228.625f, 230.375f, 232.625f, 234.375f, 236.625f,
                             238.375f, 240.625f, 242.375f, 244.625f, 246.375f, 248.625f, 250.375f,
                             252.625f, 254.375f};
-    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "0"}}, {4, 1, 4, 4, 4}, X, {4, 1, 4, 4, 2}, Y);
+    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "0"}}, {4, 1, 4, 4, 4}, X, {4, 1, 4, 4, 2}, Y, excluded_eps);
   }
   {
     std::vector<float> Y = {2.5f, 3.5f, 4.5f, 5.5f, 9.5f, 10.5f, 11.5f, 12.5f, 18.5f,
@@ -2084,7 +2096,7 @@ TEST(ResizeOpTest, Antialias_Trilinear_Scale_Is_11s_and_1s1) {
                             217.5f, 218.5f, 219.5f, 220.5f, 226.5f, 227.5f, 228.5f, 229.5f, 233.5f,
                             234.5f, 235.5f, 236.5f, 242.5f, 243.5f, 244.5f, 245.5f, 249.5f, 250.5f,
                             251.5f, 252.5f};
-    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "0"}}, {4, 1, 4, 4, 4}, X, {4, 1, 4, 2, 4}, Y);
+    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "0"}}, {4, 1, 4, 4, 4}, X, {4, 1, 4, 2, 4}, Y, excluded_eps);
   }
 }
 
@@ -2124,7 +2136,9 @@ TEST(ResizeOpTest, Antialias_NHWCBicubic_ExcludeOutside) {
       19.576872f, 43.57687f, 21.126253f, 45.126255f, 22.606192f,
       46.606194f, 19.878183f, 43.87818f, 21.358122f, 45.35812f,
       22.907503f, 46.907505f, 24.387442f, 48.387444f};
-  TestAntialiasing({{"mode", "cubic"}, {"exclude_outside", "0"}}, {1, 4, 6, 2}, X, {1, 8, 4, 2}, Y);
+
+  InlinedVector<std::string_view> excluded_eps = {kCudaExecutionProvider};
+  TestAntialiasing({{"mode", "cubic"}, {"exclude_outside", "0"}}, {1, 4, 6, 2}, X, {1, 8, 4, 2}, Y, excluded_eps);
 }
 
 TEST(ResizeOpTest, Antialias_Linear_AlignCorners) {
@@ -2145,9 +2159,41 @@ TEST(ResizeOpTest, Antialias_Linear_AlignCorners) {
       187.08333f, 195.91667f, 198.41667f, 205.91667f, 208.41667f,
       217.25f, 219.75f, 227.25f, 229.75f, 238.58333f,
       241.08333f, 248.58333f, 251.08333f};
+  InlinedVector<std::string_view> excluded_eps = {kCudaExecutionProvider};
   TestAntialiasing(
       {{"mode", "linear"}, {"exclude_outside", "0"}, {"coordinate_transformation_mode", "align_corners"}},
-      {4, 1, 4, 4, 4}, X, {4, 1, 3, 2, 2}, Y);
+      {4, 1, 4, 4, 4}, X, {4, 1, 3, 2, 2}, Y, excluded_eps);
+}
+
+TEST(ResizeOpTest, Antialias_Linear_AlignCorners_3D) {
+  if (DefaultDmlExecutionProvider().get() != nullptr) {
+    GTEST_SKIP() << "Skipping because dml implementation of antialias is slightly different and doesn't match in all cases.";
+  }
+  std::vector<float> X(256);
+  std::iota(X.begin(), X.end(), 0.0f);
+  std::vector<float> Y {
+     1.25f, 3.75f, 11.25f, 13.75f,
+     17.25f, 19.75f, 27.25f, 29.75f,
+     33.25f, 35.75f, 43.25f, 45.75f,
+     49.25f, 51.75f, 59.25f, 61.75f,
+     65.25f, 67.75f, 75.25f, 77.75f,
+     81.25f, 83.75f, 91.25f, 93.75f,
+     97.25f, 99.75f, 107.25f, 109.75f,
+     113.25f, 115.75f, 123.25f, 125.75f,
+     129.25f, 131.75f, 139.25f, 141.75f,
+     145.25f, 147.75f, 155.25f, 157.75f,
+     161.25f, 163.75f, 171.25f, 173.75f,
+     177.25f, 179.75f, 187.25f, 189.75f,
+     193.25f, 195.75f, 203.25f, 205.75f,
+     209.25f, 211.75f, 219.25f, 221.75f,
+     225.25f, 227.75f, 235.25f, 237.75f,
+     241.25f, 243.75f, 251.25f, 253.75f
+   };
+
+
+  TestAntialiasing(
+      {{"mode", "linear"}, {"exclude_outside", "0"}, {"coordinate_transformation_mode", "align_corners"}},
+      {16, 4, 4}, X, {16, 2, 2}, Y);
 }
 
 TEST(ResizeOpTest, Antialias_Bicubic_ExcludeOutside) {
