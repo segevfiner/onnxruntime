@@ -82,6 +82,10 @@ class OnnxModel:
                     output_name_to_node[output_name] = node
         return output_name_to_node
 
+    def functions(self):
+        all_functions = [list(self.model.functions)]
+        return all_functions
+
     def nodes(self):
         all_nodes = []
         for graph in self.graphs():
@@ -733,6 +737,7 @@ class OnnxModel:
                     "node_block_list",
                     "force_fp16_initializers",
                     "force_fp16_inputs",
+                    "use_bfloat16_as_blocked_nodes_dtype",
                 ]
                 if key in kwargs
             }
@@ -833,11 +838,9 @@ class OnnxModel:
 
     @staticmethod
     def input_index(node_output, child_node):
-        index = 0
-        for input in child_node.input:
+        for index, input in enumerate(child_node.input):
             if input == node_output:
                 return index
-            index += 1
         return -1
 
     def remove_unused_constant(self):
@@ -903,7 +906,7 @@ class OnnxModel:
         num_nodes_removed = 0
         for node in self.model.graph.node:
             first_output = get_first_output(node)
-            kept_node = output_to_node[first_output] if first_output in output_to_node else None
+            kept_node = output_to_node.get(first_output)
 
             # Need double check the node since fused node might reuse output name of some nodes to be removed.
             # It is slow to compare whole node, so we compare op_type first to avoid comparing node in most cases.
