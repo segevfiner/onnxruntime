@@ -394,15 +394,14 @@ QNNExecutionProvider::GetSupportedNodes(const GraphViewer& graph_viewer,
                                                    logger,
                                                    true /*do_op_validation*/);
     if (!convert_result.status.IsOK()) {
-      LOGS(logger, ERROR) << "Failed to convert DQ -> Q sequence to QNN Convert. "
-                          << "Type: " << node_unit->OpType() << ", Node name: " << node_unit->Name() << ", "
-                          << "Error: " << convert_result.status.ErrorMessage();
-      return {};  // This indicates a problem with the graph. Exit.
+      LOGS(logger, WARNING) << "Failed to convert DQ -> Q sequence to QNN Convert. "
+                            << "Type: " << node_unit->OpType() << ", Node name: " << node_unit->Name() << ", "
+                            << "Message: " << convert_result.status.ErrorMessage();
     }
 
     bool supported = false;
 
-    if (convert_result.q_node_unit) {  // Merged DQ -> Q sequence into QNN Convert op
+    if (convert_result.status.IsOK() && convert_result.q_node_unit) {  // Merged DQ -> Q sequence into QNN Convert op
       supported = true;
 
       // Mark the Q node unit as handled and supported here so that we don't try to process it again.
