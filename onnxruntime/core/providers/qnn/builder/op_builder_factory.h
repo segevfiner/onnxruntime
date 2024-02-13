@@ -115,7 +115,6 @@ struct HandleConvertResult {
 HandleConvertResult TryHandleConvertSequence(QnnModelWrapper& qnn_model_wrapper,
                                              const NodeUnit& maybe_dq_node_unit,
                                              const std::unordered_map<const Node*, const NodeUnit*>& node_unit_map,
-                                             const GraphViewer& graph_viewer,
                                              const logging::Logger& logger,
                                              bool do_op_validation);
 }  // namespace qnn

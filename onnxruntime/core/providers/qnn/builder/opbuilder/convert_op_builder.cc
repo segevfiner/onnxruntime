@@ -46,9 +46,10 @@ Status ConvertOpBuilder::AddConvertToModelBuilder(QnnModelWrapper& qnn_model_wra
 HandleConvertResult TryHandleConvertSequence(QnnModelWrapper& qnn_model_wrapper,
                                              const NodeUnit& maybe_dq_node_unit,
                                              const std::unordered_map<const Node*, const NodeUnit*>& node_unit_map,
-                                             const GraphViewer& graph_viewer,
                                              const logging::Logger& logger,
                                              bool do_op_validation) {
+  const GraphViewer& graph_viewer = qnn_model_wrapper.GetGraphViewer();
+
   // Looking for a standalone DQ to start the sequence.
   if (maybe_dq_node_unit.OpType() != QDQ::DQOpName || maybe_dq_node_unit.UnitType() != NodeUnit::Type::SingleNode) {
     return {};

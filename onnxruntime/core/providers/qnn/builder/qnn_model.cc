@@ -138,7 +138,6 @@ Status QnnModel::ComposeGraph(const GraphViewer& graph_viewer,
     auto convert_result = TryHandleConvertSequence(qnn_model_wrapper,
                                                    node_unit,
                                                    node_unit_map,
-                                                   graph_viewer,
                                                    logger_,
                                                    false /*do_op_validation*/);
     ORT_RETURN_IF_ERROR(convert_result.status);
@@ -183,7 +182,7 @@ Status QnnModel::FinalizeGraphs() {
     return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Failed to finalize QNN graph.");
   }
 
-  // ORT_RETURN_IF_ERROR(qnn_backend_manager_->ExtractBackendProfilingInfo());
+  ORT_RETURN_IF_ERROR(qnn_backend_manager_->ExtractBackendProfilingInfo());
 
   LOGS(logger_, VERBOSE) << "FinalizeGraphs completed.";
   return Status::OK();
