@@ -314,7 +314,6 @@ void ComputeInterpolationAtLevel2(int64_t num_channels, int64_t input_height, in
                                   const FilterParamsAntiAlias<AccumulateType>& p,
                                   const FilterParamsBaseAntiAlias<AccumulateType>& p_dim,
                                   concurrency::ThreadPool* tp) {
-
   const uint8_t* clip8_lookups = &p.GetClip8LookupTable()[640];
   // This condition is set for higher performance.
   // Observed that TrySimpleParallelFor in dim num_channels is always have higher efficiency, so I would rather

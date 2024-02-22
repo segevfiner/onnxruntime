@@ -45,7 +45,7 @@ Upsample<T>::Upsample(const OpKernelInfo& info) : UpsampleBase(info), CudaKernel
     auto alloc = info.GetAllocator(OrtMemTypeDefault);
     shared_lookup_table_ondevice_ = IAllocator::MakeUniquePtr<uint8_t>(std::move(alloc), kLookupTableSize);
     CUDA_CALL_THROW(cudaMemcpyAsync(shared_lookup_table_ondevice_.get(), lookup_table, kLookupTableSize,
-                                     cudaMemcpyHostToDevice, nullptr));
+                                    cudaMemcpyHostToDevice, nullptr));
   }
 }
 
