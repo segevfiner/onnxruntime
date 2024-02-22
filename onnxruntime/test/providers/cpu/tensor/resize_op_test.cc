@@ -1893,7 +1893,11 @@ void TestAntialiasing(std::map<std::string, std::string> attributes,
 
   test.AddOutput<T>("Y", output_shape, output_data);
 
-  std::unordered_set<std::string> excluded_eps(excluded_ep.begin(), excluded_ep.end());
+  std::unordered_set<std::string> excluded_eps;
+  std::transform(excluded_ep.begin(), excluded_ep.end(),
+                 std::inserter(excluded_eps, excluded_eps.end()), [](std::string_view ep) {
+                   return std::string(ep);
+                 });
   // TensorRT 8.5 supports operators up to Opset 17. Temporarily exclude TensorRT EP due to accuracy issue.
   excluded_eps.insert(kTensorrtExecutionProvider);
 
