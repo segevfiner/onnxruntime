@@ -37,24 +37,15 @@ REGISTER_VERSIONED_TYPED_KERNEL(MLFloat16, 9, 9);
 REGISTER_VERSIONED_TYPED_KERNEL(int32_t, 9, 9);
 REGISTER_VERSIONED_TYPED_KERNEL(uint8_t, 9, 9);
 
-//#define CPU_TESTING
-
 template <typename T>
 Upsample<T>::Upsample(const OpKernelInfo& info) : UpsampleBase(info), CudaKernel(info) {
   if (UpsampleBase::antialias_) {
     // Copy the table on DEVICE
     const uint8_t* lookup_table = GetLookupTableShared();
-#ifdef CPU_TESTING
-    // CPU For debugging
-    auto alloc = info.GetAllocator(OrtMemTypeCPU);
-    shared_lookup_table_ondevice_ = IAllocator::MakeUniquePtr<uint8_t>(std::move(alloc), kLookupTableSize);
-    memcpy(shared_lookup_table_ondevice_.get(), lookup_table, kLookupTableSize);
-#else
     auto alloc = info.GetAllocator(OrtMemTypeDefault);
     shared_lookup_table_ondevice_ = IAllocator::MakeUniquePtr<uint8_t>(std::move(alloc), kLookupTableSize);
     CUDA_CALL_THROW(cudaMemcpyAsync(shared_lookup_table_ondevice_.get(), lookup_table, kLookupTableSize,
-                                    cudaMemcpyHostToDevice, nullptr));
-#endif
+                                     cudaMemcpyHostToDevice, nullptr));
   }
 }
 
@@ -109,18 +100,9 @@ Status Upsample<T>::BaseCompute(OpKernelContext* context,
     }
 
     if (antialias_) {
-#ifdef CPU_TESTING
-      /// Test on CPU first
-      AllocatorPtr allocator_ptr;
-      ORT_RETURN_IF_ERROR(context->GetTempSpaceCPUAllocator(&allocator_ptr));
-      TempSpaceAllocateFunc allocate_temp_space = [allocator_ptr = std::move(allocator_ptr)](size_t bytes_size) {
-        return IAllocator::MakeUniquePtr<uint8_t>(allocator_ptr, bytes_size);
-      };
-#else
       TempSpaceAllocateFunc allocate_temp_space = [&](size_t bytes_size) {
         return GetScratchBuffer<uint8_t>(bytes_size, context->GetComputeStream());
       };
-#endif
 
       std::optional<float> extrapolation_value;
       if (use_extrapolation_)

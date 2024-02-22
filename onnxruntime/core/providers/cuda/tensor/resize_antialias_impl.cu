@@ -4,17 +4,7 @@
 #include "core/providers/cuda/cu_inc/common.cuh"
 #include "core/providers/cuda/tensor/resize_impl.h"
 
-//#define CPU_TESTING true
-
-#ifdef CPU_TESTING
-#undef __global__
-#define __global__
-using IdType = int;
-#define FUNC_DEF __host__
-#else
-using IdType = int;
 #define FUNC_DEF __device__
-#endif
 
 namespace onnxruntime {
 namespace cuda {
@@ -38,15 +28,6 @@ static std::tuple<int64_t, int64_t> ComputeBilinearScaleBufferSize(int64_t outpu
   auto height_buffer_size = ComputeWeightedCoeffBufferSize(output_height, window_size_height);
   auto width_buffer_size = ComputeWeightedCoeffBufferSize(output_width, window_size_width);
 
-  std::cout << "\tCUDA BILINEAR logs: \n";
-  std::cout << "\toutput_height: " << output_height << " output_width: " << output_width
-            << " height_rscale: " << height_rscale << " width_rscale: " << width_rscale
-            << " support_value: " << support_value
-            << " scaled_support_height: " << scaled_support_height << " scaled_support_width: \n"
-            << scaled_support_width;
-  std::cout << "\tHeight Buffer size: " << static_cast<size_t>(height_buffer_size)
-            << "\n Width Buffer size: " << static_cast<size_t>(width_buffer_size);
-
   return std::make_tuple(height_buffer_size, width_buffer_size);
 }
 
@@ -63,12 +44,6 @@ static std::tuple<int64_t, int64_t, int64_t> ComputeTrilinearScaleBufferSize(
   scaled_support_depth = ComputeScaledSupportValue(support_value, depth_rscale);
   window_size_depth = ComputeWindowSize(scaled_support_depth);
   auto depth_buffer_size = ComputeWeightedCoeffBufferSize(output_depth, window_size_depth);
-
-  std::cout << "\tCUDA TRILINEAR logs: "
-            << "output_depth: " << output_depth << " output_height: " << output_height << " output_width: " << output_width
-            << " inv_height_scale: " << height_rscale << " inv_width_scale: " << width_rscale
-            << " inv_depth_scale: " << depth_rscale
-            << " depth_buffer_size: " << static_cast<size_t>(depth_buffer_size);
 
   const auto [y_buffer_size, w_buffer_size] = ComputeBilinearScaleBufferSize(output_height, output_width, height_rscale,
                                                                              width_rscale, support_value, scaled_support_height, scaled_support_width,
@@ -134,9 +109,6 @@ struct AccumTypeCaster<int32_t> {
 
 template <typename T, typename AccumType>
 __global__ void _ComputeInterpolationAtLevel1(
-#ifdef CPU_TESTING
-    IdType id,
-#endif
     int64_t num_channels,
     int64_t input_height, int64_t input_width,
     int64_t output_height, int64_t output_width,
@@ -150,9 +122,7 @@ __global__ void _ComputeInterpolationAtLevel1(
     const T* Xdata, T* Ydata,
     const int N) {
 
-#ifndef CPU_TESTING
   CALCULATE_ELEMENTWISE_INDEX_OR_EXIT(id, N);
-#endif
 
   // No need to do scale
   if (output_width == input_width) {
@@ -204,9 +174,6 @@ __global__ void _ComputeInterpolationAtLevel1(
 
 template <typename T, typename AccumType>
 __global__ void _ComputeInterpolationAtLevel2(
-#ifdef CPU_TESTING
-    IdType id,
-#endif
     int64_t num_channels,
     int64_t input_height, int64_t input_width,
     int64_t output_height, int64_t output_width,
@@ -220,9 +187,8 @@ __global__ void _ComputeInterpolationAtLevel2(
     std::tuple<int64_t*, int64_t*> outof_bounds_buffers,
     const AccumType* weight_coefficients,
     const T* Xdata, T* Ydata, int N) {
-#ifndef CPU_TESTING
+
   CALCULATE_ELEMENTWISE_INDEX_OR_EXIT(id, N);
-#endif
 
   // No need to do scale
   if (output_height == input_height) {
@@ -246,9 +212,6 @@ __global__ void _ComputeInterpolationAtLevel2(
     const auto* w_outof_bounds = std::get<1>(outof_bounds_buffers);
     // Extrapolate along the w dimension
     if (w_outof_bounds[static_cast<ptrdiff_t>(output_x)] != -1) {
-#ifdef CPU_TESTING
-      assert(w_outof_bounds[static_cast<ptrdiff_t>(output_x)] == output_x);
-#endif
       *Ydata_offset = static_cast<T>(extrapolation_value);
       return;
     }
@@ -256,9 +219,6 @@ __global__ void _ComputeInterpolationAtLevel2(
     // Extrapolate along the y dimension
     const auto* y_outof_bounds = std::get<0>(outof_bounds_buffers);
     if (y_outof_bounds[static_cast<ptrdiff_t>(output_y)] != -1) {
-#ifdef CPU_TESTING
-      assert(y_outof_bounds[static_cast<ptrdiff_t>(output_y)] == output_y);
-#endif
       *Ydata_offset = static_cast<T>(extrapolation_value);
       return;
     }
@@ -298,9 +258,6 @@ __global__ void _ComputeInterpolationAtLevel2(
 
 template <typename T, typename AccumType>
 __global__ void _ComputeInterpolationAtLevel3(
-#ifdef CPU_TESTING
-    IdType id,
-#endif
     int64_t input_depth,
     int64_t input_height, int64_t input_width,
     int64_t output_depth,
@@ -315,9 +272,8 @@ __global__ void _ComputeInterpolationAtLevel3(
     std::tuple<int64_t*, int64_t*, int64_t*> outof_bounds_buffers,
     const AccumType* weight_coefficients,
     const T* Xdata, T* Ydata, int N) {
-#ifndef CPU_TESTING
+
   CALCULATE_ELEMENTWISE_INDEX_OR_EXIT(id, N);
-#endif
 
   // No need to do scale
   if (input_depth == output_depth) {
@@ -340,9 +296,6 @@ __global__ void _ComputeInterpolationAtLevel3(
     const auto* w_outof_bounds = std::get<2>(outof_bounds_buffers);
     // Extrapolate along the w dimension
     if (w_outof_bounds[static_cast<ptrdiff_t>(output_x)] != -1) {
-#ifdef CPU_TESTING
-      assert(w_outof_bounds[static_cast<ptrdiff_t>(output_x)] == output_x);
-#endif
       *Ydata_offset = static_cast<T>(extrapolation_value);
       return;
     }
@@ -350,9 +303,6 @@ __global__ void _ComputeInterpolationAtLevel3(
     // Extrapolate along the y dimension
     const auto* y_outof_bounds = std::get<2>(outof_bounds_buffers);
     if (y_outof_bounds[static_cast<ptrdiff_t>(output_y)] != -1) {
-#ifdef CPU_TESTING
-      assert(y_outof_bounds[static_cast<ptrdiff_t>(output_y)] == output_y);
-#endif
       *Ydata_offset = static_cast<T>(extrapolation_value);
       return;
     }
@@ -360,9 +310,6 @@ __global__ void _ComputeInterpolationAtLevel3(
     // Extrapolate along the y dimension
     const int64_t* z_outof_bounds = std::get<0>(outof_bounds_buffers);
     if (z_outof_bounds != nullptr && z_outof_bounds[static_cast<ptrdiff_t>(output_z)] != -1) {
-#ifdef CPU_TESTING
-      assert(z_outof_bounds[static_cast<ptrdiff_t>(output_z)] == output_z);
-#endif
       *Ydata_offset = static_cast<T>(extrapolation_value);
       return;
     }
@@ -511,9 +458,6 @@ FUNC_DEF void SetupUpsampleFilterAnitAliasImpl(
 /// Buffers layout [h_data, w_data]
 template <typename AccumType, typename Filter, typename CudaFunctionOriginalCoordinate>
 __global__ void _SetupBilinearUpsampleFilterAntiAlias(
-#ifdef CPU_TESTING
-    IdType id,
-#endif
     std::tuple<int64_t, int64_t> input_dims,       // h, w
     std::tuple<int64_t, int64_t> output_dims,      // h, w
     std::tuple<float, float> inv_scale_vals,       // h, w
@@ -529,12 +473,7 @@ __global__ void _SetupBilinearUpsampleFilterAntiAlias(
 ) {
   const auto N = std::get<0>(output_dims) + std::get<1>(output_dims);
 
-#ifndef CPU_TESTING
   CALCULATE_ELEMENTWISE_INDEX_OR_EXIT(id, N);
-#else
-  if (id >= N)
-    return;
-#endif
 
   if (id < std::get<0>(output_dims)) {
     // Setup for y
@@ -545,17 +484,6 @@ __global__ void _SetupBilinearUpsampleFilterAntiAlias(
     float roi_end = std::get<0>(roi_end_vals);
     float scaled_support = std::get<0>(dim_scaled_support);
     int32_t window_size = std::get<0>(dim_window_size);
-
-#ifdef CPU_TESTING
-    if (id == 0) {
-      const auto scale = 1.f / inv_scale;
-      const float inv_scale_1 = (scale >= 1.0f) ? 1.0f / scale : 1.0f;
-
-      std::cout << "Rscale: " << inv_scale_1 << " Scale: " << scale << " Scaled Support: " << scaled_support << " Window Size: " << window_size
-                << " Input Size: " << input_size << " Output Size: " << output_size << " Inv Scale: " << inv_scale
-                << " roi_start: " << roi_start << " roi_end " << roi_end;
-    }
-#endif
 
     SetupUpsampleFilterAnitAliasImpl<AccumType, Filter, CudaFunctionOriginalCoordinate>(
         id,
@@ -584,17 +512,6 @@ __global__ void _SetupBilinearUpsampleFilterAntiAlias(
 
     // Adjust buffer positions
     const auto y_output_size = std::get<0>(output_dims);
-
-#ifdef CPU_TESTING
-    if (id == y_output_size) {
-      const auto scale = 1.f / inv_scale;
-      const float inv_scale_1 = (scale >= 1.0f) ? 1.0f / scale : 1.0f;
-
-      std::cout << "Rscale: " << inv_scale_1 << " Scale: " << scale << " Scaled Support: " << scaled_support << " Window Size: " << window_size
-                << " Input Size: " << input_size << " Output Size: " << output_size << " Inv Scale: " << inv_scale
-                << " roi_start: " << roi_start << " roi_end " << roi_end;
-    }
-#endif
 
     auto i = id - y_output_size;
     bounds += (y_output_size * 2);
@@ -625,9 +542,6 @@ __global__ void _SetupBilinearUpsampleFilterAntiAlias(
 /// </summary>
 template <typename AccumType, typename Filter, typename CudaFunctionOriginalCoordinate>
 __global__ void _SetupTrilinerarUpsampleFilterAntiAlias(
-#ifdef CPU_TESTING
-    IdType id,
-#endif
     std::tuple<int64_t, int64_t, int64_t> input_dims,       // d, h, w
     std::tuple<int64_t, int64_t, int64_t> output_dims,      // d, h, w
     std::tuple<float, float, float> inv_scale_vals,         // d, h, w
@@ -642,12 +556,7 @@ __global__ void _SetupTrilinerarUpsampleFilterAntiAlias(
 
   const auto N = std::get<0>(output_dims) + std::get<1>(output_dims) + std::get<2>(output_dims);
 
-#ifndef CPU_TESTING
   CALCULATE_ELEMENTWISE_INDEX_OR_EXIT(id, N);
-#else
-  if (id >= N)
-    return;
-#endif
 
   if (id < std::get<0>(output_dims)) {
     // Setup for d by default (id < output_depth)
@@ -658,17 +567,6 @@ __global__ void _SetupTrilinerarUpsampleFilterAntiAlias(
     float roi_end = std::get<0>(roi_end_vals);
     float scaled_support = std::get<0>(dim_scaled_support);
     int32_t window_size = std::get<0>(dim_window_size);
-
-#ifdef CPU_TESTING
-    if (id == 0) {
-      const auto scale = 1.f / inv_scale;
-      const float inv_scale_1 = (scale >= 1.0f) ? 1.0f / scale : 1.0f;
-
-      std::cout << "Rscale: " << inv_scale_1 << " Scale: " << scale << " Scaled Support: " << scaled_support << " Window Size: " << window_size
-                << " Input Size: " << input_size << " Output Size: " << output_size << " Inv Scale: " << inv_scale
-                << " roi_start: " << roi_start << " roi_end " << roi_end;
-    }
-#endif
 
     SetupUpsampleFilterAnitAliasImpl<AccumType, Filter, CudaFunctionOriginalCoordinate>(
         id,
@@ -694,17 +592,6 @@ __global__ void _SetupTrilinerarUpsampleFilterAntiAlias(
 
     // Adjust buffer positions
     const auto d_output_size = std::get<0>(output_dims);
-
-#ifdef CPU_TESTING
-    if (id == d_output_size) {
-      const auto scale = 1.f / inv_scale;
-      const float inv_scale_1 = (scale >= 1.0f) ? 1.0f / scale : 1.0f;
-
-      std::cout << "\nRscale: " << inv_scale_1 << " Scale: " << scale << " Scaled Support: " << scaled_support << " Window Size: " << window_size
-                << " Input Size: " << input_size << " Output Size: " << output_size << " Inv Scale: " << inv_scale
-                << " roi_start: " << roi_start << " roi_end " << roi_end;
-    }
-#endif
 
     auto i = id - d_output_size;
     bounds += d_output_size * 2;
@@ -732,17 +619,6 @@ __global__ void _SetupTrilinerarUpsampleFilterAntiAlias(
 
     // Adjust buffer positions
     const auto d_y_output_size = std::get<0>(output_dims) + std::get<1>(output_dims);
-
-#ifdef CPU_TESTING
-    if (id == d_y_output_size) {
-      const auto scale = 1.f / inv_scale;
-      const float inv_scale_1 = (scale >= 1.0f) ? 1.0f / scale : 1.0f;
-
-      std::cout << "Rscale: " << inv_scale_1 << " Scale: " << scale << " Scaled Support: " << scaled_support << " Window Size: " << window_size
-                << " Input Size: " << input_size << " Output Size: " << output_size << " Inv Scale: " << inv_scale
-                << " roi_start: " << roi_start << " roi_end " << roi_end;
-    }
-#endif
 
     auto i = id - d_y_output_size;
     bounds += (d_y_output_size * 2);
@@ -854,12 +730,6 @@ void ResizeTrilinearUpsample(
   int64_t* y_outof_bounds_buffer = z_outof_bounds_buffer + output_depth;
   int64_t* w_outof_bounds_buffer = y_outof_bounds_buffer + output_height;
 
-#ifdef CPU_TESTING
-  std::cout << "CUDA CUBIC logs: " << std::endl;
-  std::cout << "Bounds Buffer size: " << static_cast<size_t>(bounds_buffer_size)
-            << " out_of_bounds_size: " << static_cast<size_t>(out_of_bounds_buffer_size);
-#endif
-
   float z_scaled_support, h_scaled_support, w_scaled_support;
   int32_t z_window_size, h_window_size, w_window_size;
   const auto [z_buffer_size, y_buffer_size, w_buffer_size] = ComputeTrilinearScaleBufferSize(
@@ -881,107 +751,6 @@ void ResizeTrilinearUpsample(
   const auto h_w_interpolate_result_buffer_size = SafeInt<int64_t>(batch_size) * num_channels * input_depth * output_height * output_width;
   auto h_w_interpolate_result_buffer_ptr = AllocateTyped<T>(allocate_temp_space, h_w_interpolate_result_buffer_size);
 
-#ifdef CPU_TESTING
-  for (IdType id = 0, lim = narrow<IdType>(output_depth + output_height + output_width); id < lim; ++id) {
-    DISPATCH_ANTIALIAS_FILTER_SETUP(coordinate_transform_mode, [&]() {
-      _SetupTrilinerarUpsampleFilterAntiAlias<AccumType,
-                                              TriLinearFilter,
-                                              coord_t>(
-          id,
-          inferred_input_dims,
-          inferred_output_dims,
-          inferred_dim_rscales,
-          std::make_tuple(roi_vals[rank - 3], roi_vals[rank - 2], roi_vals[rank - 1]),  // roi starts d, h, w
-          std::make_tuple(roi_vals[rank - 3 + rank], roi_vals[rank - 2 + rank],         // roi ends d, h, w
-                          roi_vals[rank - 1 + rank]),
-          std::make_tuple(z_scaled_support, h_scaled_support, w_scaled_support),
-          std::make_tuple(z_window_size, h_window_size, w_window_size),
-          exclude_outside,
-          GetTyped<int64_t>(bounds_buffer_ptr),
-          GetTyped<int64_t>(out_of_bounds_buffer_ptr),
-          std::make_tuple(z_weighted_buffer, y_weighted_buffer, w_weighted_buffer));
-    });
-  }
-
-  auto bounds_buffer_span = gsl::make_span(GetTyped<int64_t>(bounds_buffer_ptr), bounds_buffer_size);
-  auto out_of_bounds_buffer_span = gsl::make_span(GetTyped<int64_t>(out_of_bounds_buffer_ptr), out_of_bounds_buffer_size);
-  auto weighted_buffer_span = gsl::make_span(GetTyped<AccumType>(weighted_buffer_ptr), weighted_buffer_size);
-  PrintAntiAliasBuffers(std::cout, bounds_buffer_span, out_of_bounds_buffer_span, weighted_buffer_span);
-
-  const int input_size = narrow<int>(batch_size * input_depth * num_channels * input_height * input_width);
-  auto host_input_buffer = AllocateTyped<T>(allocate_temp_space, input_size);
-
-  CUDA_CALL_THROW(cudaMemcpyAsync(host_input_buffer.get(), input_data,
-                                  input_size * sizeof(T), cudaMemcpyDeviceToHost, stream));
-
-  std::cout << "CL1: ";
-
-  fast_divmod div_w_image(narrow<int>(num_channels * input_depth * input_height * output_width));
-  // We feed all the inputs, but the width is reduced at this step.
-  for (IdType id = 0, lim = narrow<IdType>(h_w_interpolate_temp_buf_size); id < lim; ++id) {
-    _ComputeInterpolationAtLevel1(id, num_channels * input_depth, input_height, input_width, input_height, output_width,
-                                  div_output_width,
-                                  div_w_image,
-                                  w_window_size,
-                                  clip8_lookups,
-                                  w_bounds_buffer,
-                                  std::make_tuple(y_outof_bounds_buffer, w_outof_bounds_buffer),
-                                  w_weighted_buffer, GetTyped<T>(host_input_buffer),
-                                  GetTyped<T>(h_w_interpolate_temp_buffer_ptr),
-                                  narrow<int>(h_w_interpolate_temp_buf_size));
-  }
-
-  std::cout << std::endl;
-
-  std::cout << "CL2: ";
-
-  const fast_divmod div_output_height{narrow<int>(output_height * output_width)};
-  const fast_divmod div_h_w_image(narrow<int>(num_channels * input_depth * output_height * output_width));
-  // Here we feed temp buffer input_height x output_width and the output is N.
-  // Defer extrapolation for the next step
-  for (IdType id = 0, lim = narrow<IdType>(h_w_interpolate_result_buffer_size); id < lim; ++id) {
-    _ComputeInterpolationAtLevel2(id, num_channels * input_depth, input_height, output_width, output_height, output_width,
-                                  div_output_height,
-                                  div_output_width,
-                                  div_h_w_image,
-                                  h_window_size,
-                                  false, 0.f,  // No extrapolation
-                                  clip8_lookups,
-                                  y_bounds_buffer,
-                                  std::make_tuple(y_outof_bounds_buffer, w_outof_bounds_buffer),
-                                  y_weighted_buffer, GetTyped<T>(h_w_interpolate_temp_buffer_ptr),
-                                  GetTyped<T>(h_w_interpolate_result_buffer_ptr),
-                                  narrow<int>(h_w_interpolate_result_buffer_size));
-  }
-
-  std::cout << std::endl;
-
-  std::cout << "CL3: ";
-
-  auto output_cpu_buffer_ptr = AllocateTyped<T>(allocate_temp_space, N);
-  const fast_divmod div_z_h_w_image(narrow<int>(input_depth * output_height * output_width));
-  for (IdType id = 0, lim = narrow<IdType>(N); id < lim; ++id) {
-    _ComputeInterpolationAtLevel3(id, input_depth, output_height, output_width,
-                                  output_depth, output_height, output_width,
-                                  div_output_height,
-                                  div_output_width,
-                                  div_z_h_w_image,
-                                  z_window_size,
-                                  use_extrapolation, extrapolation_value,
-                                  clip8_lookups,
-                                  z_bounds_buffer,
-                                  std::make_tuple(z_outof_bounds_buffer, y_outof_bounds_buffer, w_outof_bounds_buffer),
-                                  z_weighted_buffer, GetTyped<T>(h_w_interpolate_result_buffer_ptr),
-                                  GetTyped<T>(output_cpu_buffer_ptr),
-                                  narrow<int>(N));
-  }
-
-  std::cout << std::endl;
-
-  CUDA_CALL_THROW(cudaMemcpyAsync(output_data, output_cpu_buffer_ptr.get(),
-                                  N * sizeof(T), cudaMemcpyHostToDevice, stream));
-
-#else
   // clang-format off
   DISPATCH_ANTIALIAS_FILTER_SETUP(coordinate_transform_mode, [&]() {
     _SetupTrilinerarUpsampleFilterAntiAlias<AccumType,
@@ -1052,7 +821,6 @@ void ResizeTrilinearUpsample(
       output_data,
       narrow<int>(N));
   // clang-format on
-#endif
 }
 
 template <class T>
@@ -1103,10 +871,6 @@ void ResizeBiLinearUpsample(cudaStream_t stream,
   SafeInt<int64_t> bounds_buffer_size = (SafeInt<int64_t>(output_height) + output_width) * 2;
   SafeInt<int64_t> out_of_bounds_buffer_size = (SafeInt<int64_t>(output_height) + output_width);
 
-  std::cout << "CUDA LINEAR logs: " << std::endl;
-  std::cout << "Bounds Buffer size: " << static_cast<size_t>(bounds_buffer_size)
-            << " out_of_bounds_size: " << static_cast<size_t>(out_of_bounds_buffer_size);
-
   float h_scaled_support, w_scaled_support;
   int32_t h_window_size, w_window_size;
   const auto [weighted_y_size, weighted_w_size] =
@@ -1134,82 +898,6 @@ void ResizeBiLinearUpsample(cudaStream_t stream,
   auto image_temp_buffer = AllocateTyped<T>(allocate_temp_space,
                                             narrow<size_t>(temp_buf_size));
 
-#ifdef CPU_TESTING
-
-  for (IdType id = 0, lim = narrow<IdType>(output_height + output_width); id < lim; ++id) {
-    DISPATCH_ANTIALIAS_FILTER_SETUP(coordinate_transform_mode, [&]() {
-      _SetupBilinearUpsampleFilterAntiAlias<AccumType,
-                                            BilinearFilter,
-                                            coord_t>(
-          id,
-          std::make_tuple(input_height, input_width),
-          std::make_tuple(output_height, output_width),
-          std::make_tuple(h_scale, w_scale),
-          std::make_tuple(roi_vals[rank - 2], roi_vals[rank - 1]),                // roi starts h, w
-          std::make_tuple(roi_vals[rank - 2 + rank], roi_vals[rank - 1 + rank]),  // roi ends h, w
-          std::make_tuple(h_scaled_support, w_scaled_support),
-          std::make_tuple(h_window_size, w_window_size),
-          onnxruntime::kCubicCoeffA, exclude_outside,
-          GetTyped<int64_t>(bounds_buffer_ptr),
-          GetTyped<int64_t>(out_of_bounds_buffer_ptr),
-          std::make_tuple(y_weighted_buffer, w_weighted_buffer));
-    });
-  }
-
-  auto bounds_buffer_span = gsl::make_span(GetTyped<int64_t>(bounds_buffer_ptr), bounds_buffer_size);
-  auto out_of_bounds_buffer_span = gsl::make_span(GetTyped<int64_t>(out_of_bounds_buffer_ptr), out_of_bounds_buffer_size);
-  auto weighted_buffer_span = gsl::make_span(GetTyped<AccumType>(weighted_buffer_ptr), weighted_buffer_size);
-  PrintAntiAliasBuffers(std::cout, bounds_buffer_span, out_of_bounds_buffer_span, weighted_buffer_span);
-
-  const int input_size = narrow<int>(input_height * input_width);
-  auto host_input_buffer = AllocateTyped<T>(allocate_temp_space, input_size);
-
-  CUDA_CALL_THROW(cudaMemcpyAsync(host_input_buffer.get(), input_data,
-                                  input_size * sizeof(T), cudaMemcpyDeviceToHost, stream));
-
-  std::cout << "CL1: ";
-
-  // Height is the same as input height, but width is reduced at 1 step.
-  fast_divmod div_step_image{narrow<int>(num_channels * input_height * output_width)};
-  for (IdType id = 0, lim = narrow<IdType>(temp_buf_size); id < lim; ++id) {
-    _ComputeInterpolationAtLevel1(id, num_channels, input_height, input_width, input_height, output_width,
-                                  div_output_width,  // div_output_width
-                                  div_step_image,
-                                  w_window_size,
-                                  clip8_lookups,
-                                  w_bounds_buffer,
-                                  std::make_tuple(y_outof_bounds_buffer, w_outof_bounds_buffer),
-                                  w_weighted_buffer, GetTyped<T>(host_input_buffer), GetTyped<T>(image_temp_buffer),
-                                  narrow<int>(temp_buf_size));
-  }
-
-  std::cout << std::endl;
-
-  auto host_output_buffer = AllocateTyped<T>(allocate_temp_space, N);
-
-  std::cout << "CL2: ";
-
-  // Here we feed temp buffer input_height x output_width and the output is N.
-  fast_divmod div_output_height{narrow<int>(output_height * output_width)};
-  for (IdType id = 0, lim = narrow<IdType>(N); id < lim; ++id) {
-    _ComputeInterpolationAtLevel2(id, num_channels, input_height, output_width, output_height, output_width,
-                                  div_output_height,
-                                  div_output_width,
-                                  div_output_image,
-                                  h_window_size,
-                                  use_extrapolation, extrapolation_value,
-                                  clip8_lookups,
-                                  y_bounds_buffer,
-                                  std::make_tuple(y_outof_bounds_buffer, w_outof_bounds_buffer),
-                                  y_weighted_buffer, GetTyped<T>(image_temp_buffer), GetTyped<T>(host_output_buffer),
-                                  narrow<int>(N));
-  }
-
-  std::cout << std::endl;
-
-  CUDA_CALL_THROW(cudaMemcpyAsync(output_data, host_output_buffer.get(),
-                                  N * sizeof(T), cudaMemcpyHostToDevice, stream));
-#else
   // clang-format off
   DISPATCH_ANTIALIAS_FILTER_SETUP(coordinate_transform_mode, [&]() {
     //  Data is d, h, w in tuples
@@ -1260,8 +948,7 @@ void ResizeBiLinearUpsample(cudaStream_t stream,
       y_weighted_buffer, GetTyped<T>(image_temp_buffer), output_data,
       narrow<int>(N));
 
-// clang-format on
-#endif
+  // clang-format on
 }
 
 template <typename T>
@@ -1311,10 +998,6 @@ void ResizeBicubicUpsample(cudaStream_t stream,
   SafeInt<int64_t> bounds_buffer_size = (SafeInt<int64_t>(output_height) + output_width) * 2;
   SafeInt<int64_t> out_of_bounds_buffer_size = (SafeInt<int64_t>(output_height) + output_width);
 
-  std::cout << "CUDA CUBIC logs: " << std::endl;
-  std::cout << "Bounds Buffer size: " << static_cast<size_t>(bounds_buffer_size)
-            << " out_of_bounds_size: " << static_cast<size_t>(out_of_bounds_buffer_size) << std::endl;
-
   float h_scaled_support, w_scaled_support;
   int32_t h_window_size, w_window_size;
   const auto [weighted_y_size, weighted_w_size] =
@@ -1344,83 +1027,6 @@ void ResizeBicubicUpsample(cudaStream_t stream,
   auto image_temp_buffer = AllocateTyped<T>(allocate_temp_space,
                                             narrow<size_t>(temp_buf_size));
 
-#ifdef CPU_TESTING
-
-  for (IdType id = 0, lim = narrow<IdType>(output_height + output_width); id < lim; ++id) {
-    DISPATCH_ANTIALIAS_FILTER_SETUP(coordinate_transform_mode, [&]() {
-      _SetupBilinearUpsampleFilterAntiAlias<AccumType,
-                                            BiCubicFilter,
-                                            coord_t>(
-          id,
-          std::make_tuple(input_height, input_width),
-          std::make_tuple(output_height, output_width),
-          std::make_tuple(h_scale, w_scale),
-          std::make_tuple(roi_vals[rank - 2], roi_vals[rank - 1]),                // roi starts h, w
-          std::make_tuple(roi_vals[rank - 2 + rank], roi_vals[rank - 1 + rank]),  // roi ends h, w
-          std::make_tuple(h_scaled_support, w_scaled_support),
-          std::make_tuple(h_window_size, w_window_size),
-          onnxruntime::kCubicCoeffA, exclude_outside,
-          GetTyped<int64_t>(bounds_buffer_ptr),
-          GetTyped<int64_t>(out_of_bounds_buffer_ptr),
-          std::make_tuple(y_weighted_buffer, w_weighted_buffer));
-    });
-  }
-
-  auto bounds_buffer_span = gsl::make_span(GetTyped<int64_t>(bounds_buffer_ptr), bounds_buffer_size);
-  auto out_of_bounds_buffer_span = gsl::make_span(GetTyped<int64_t>(out_of_bounds_buffer_ptr), out_of_bounds_buffer_size);
-  auto weighted_buffer_span = gsl::make_span(GetTyped<AccumType>(weighted_buffer_ptr), weighted_buffer_size);
-  PrintAntiAliasBuffers(std::cout, bounds_buffer_span, out_of_bounds_buffer_span, weighted_buffer_span);
-
-  const int input_size = narrow<int>(batch_size * num_channels * input_height * input_width);
-  auto host_input_buffer = AllocateTyped<T>(allocate_temp_space, input_size);
-
-  CUDA_CALL_THROW(cudaMemcpyAsync(host_input_buffer.get(), input_data,
-                                  input_size * sizeof(T), cudaMemcpyDeviceToHost, stream));
-
-  std::cout << "CL1: ";
-
-  fast_divmod div_step_image(narrow<int>(num_channels * input_height * output_width));
-  // We feed all the inputs, but the width is reduced at this step.
-  for (IdType id = 0, lim = narrow<IdType>(temp_buf_size); id < lim; ++id) {
-    _ComputeInterpolationAtLevel1(id, num_channels, input_height, input_width, input_height, output_width,
-                                  div_output_width,
-                                  div_step_image,
-                                  w_window_size,
-                                  clip8_lookups,
-                                  w_bounds_buffer,
-                                  std::make_tuple(y_outof_bounds_buffer, w_outof_bounds_buffer),
-                                  w_weighted_buffer, GetTyped<T>(host_input_buffer), GetTyped<T>(image_temp_buffer),
-                                  narrow<int>(temp_buf_size));
-  }
-
-  std::cout << std::endl;
-
-  auto host_output_buffer = AllocateTyped<T>(allocate_temp_space, N);
-
-  std::cout << "CL2: ";
-
-  fast_divmod div_output_height{narrow<int>(output_height * output_width)};
-  // Here we feed temp buffer input_height x output_width and the output is N.
-  for (IdType id = 0, lim = narrow<IdType>(N); id < lim; ++id) {
-    _ComputeInterpolationAtLevel2(id, num_channels, input_height, output_width, output_height, output_width,
-                                  div_output_height,
-                                  div_output_width,
-                                  div_output_image,
-                                  h_window_size,
-                                  use_extrapolation, extrapolation_value,
-                                  clip8_lookups,
-                                  y_bounds_buffer,
-                                  std::make_tuple(y_outof_bounds_buffer, w_outof_bounds_buffer),
-                                  y_weighted_buffer, GetTyped<T>(image_temp_buffer), GetTyped<T>(host_output_buffer),
-                                  narrow<int>(N));
-  }
-
-  std::cout << std::endl;
-
-  CUDA_CALL_THROW(cudaMemcpyAsync(output_data, host_output_buffer.get(),
-                                  N * sizeof(T), cudaMemcpyHostToDevice, stream));
-
-#else
   // clang-format off
   DISPATCH_ANTIALIAS_FILTER_SETUP(coordinate_transform_mode, [&]() {
     _SetupBilinearUpsampleFilterAntiAlias<AccumType,
@@ -1468,7 +1074,6 @@ void ResizeBicubicUpsample(cudaStream_t stream,
       y_weighted_buffer, GetTyped<T>(image_temp_buffer), output_data,
       narrow<int>(N));
   // clang-format on
-#endif
 }
 
 template <class T>

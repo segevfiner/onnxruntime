@@ -1944,7 +1944,8 @@ TEST(ResizeOpTest, Antialias_Bilinear_dtype) {
     std::vector<int8_t> Y = {1, 3, 4,
                              6, 8, 9,
                              11, 13, 14};
-    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 1, 4, 4}, X, {1, 1, 3, 3}, Y);
+    InlinedVector<std::string_view> excluded_eps = {kCudaExecutionProvider};
+    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 1, 4, 4}, X, {1, 1, 3, 3}, Y, excluded_eps);
   }
   {
     std::vector<int32_t> X(16);
@@ -1994,13 +1995,13 @@ TEST(ResizeOpTest, Antialias_NhwcBilinear) {
 }
 
 TEST(ResizeOpTest, Antialias_NhwcBilinear_dtype) {
+  InlinedVector<std::string_view> excluded_eps = {kCudaExecutionProvider};
   {
     std::vector<uint8_t> X(16);
     std::iota(X.begin(), X.end(), uint8_t(0));
     std::vector<uint8_t> Y = {1, 3, 4,
                               6, 8, 9,
                               11, 13, 14};
-    InlinedVector<std::string_view> excluded_eps = {kCudaExecutionProvider};
     TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 4, 4, 1}, X, {1, 3, 3, 1}, Y, excluded_eps);
   }
   {
@@ -2009,7 +2010,7 @@ TEST(ResizeOpTest, Antialias_NhwcBilinear_dtype) {
     std::vector<int8_t> Y = {1, 3, 4,
                              6, 8, 9,
                              11, 13, 14};
-    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 4, 4, 1}, X, {1, 3, 3, 1}, Y);
+    TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 4, 4, 1}, X, {1, 3, 3, 1}, Y, excluded_eps);
   }
   {
     std::vector<int32_t> X(16);
@@ -2017,7 +2018,6 @@ TEST(ResizeOpTest, Antialias_NhwcBilinear_dtype) {
     std::vector<int32_t> Y = {1, 3, 4,
                               6, 8, 9,
                               11, 13, 14};
-    InlinedVector<std::string_view> excluded_eps = {kCudaExecutionProvider};
     TestAntialiasing({{"mode", "linear"}, {"exclude_outside", "1"}}, {1, 4, 4, 1}, X, {1, 3, 3, 1}, Y, excluded_eps);
   }
 }
@@ -2218,7 +2218,8 @@ TEST(ResizeOpTest, Antialias_Bicubic_Dtype) {
     std::vector<int8_t> X(36);
     std::iota(X.begin(), X.end(), int8_t(0));
     std::vector<int8_t> Y = {4, 6, 7, 16, 18, 19, 28, 30, 31};
-    TestAntialiasing({{"mode", "cubic"}, {"cubic_coeff_a", "-0.5f"}, {"exclude_outside", "1"}}, {1, 1, 6, 6}, X, {1, 1, 3, 3}, Y);
+    InlinedVector<std::string_view> excluded_eps = {kCudaExecutionProvider};
+    TestAntialiasing({{"mode", "cubic"}, {"cubic_coeff_a", "-0.5f"}, {"exclude_outside", "1"}}, {1, 1, 6, 6}, X, {1, 1, 3, 3}, Y, excluded_eps);
   }
   {
     std::vector<int32_t> X(36);

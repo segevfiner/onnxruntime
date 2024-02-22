@@ -140,11 +140,6 @@ void SetupUpsampleFilterAntiAlias(FilterParamsAntiAlias<T>& p,
     const auto roi_start = roi.size() / 2 - (rindex + 1);
     const auto roi_end = roi.size() - (rindex + 1);
 
-    std::cout << "Rscale: " << rscale << " Scale: " << scale << " Support: " << support << " Window Size: " << window_size
-              << " Input Size: " << input_size << " Output Size: " << output_size << " Inv Scale: " << inv_scale
-              << " roi_start: " << roi[roi_start] << " roi_end " << roi[roi_end]
-              << " Scale Buffer Size: " << scale_buffer_size << std::endl;
-
     for (int32_t i = 0; i < output_size; i++) {
       // double center = (i + 0.5) * scale;
       float center = 0.5f + (scale == 1.0f ? static_cast<float>(i)
@@ -211,9 +206,6 @@ void SetupUpsampleFilterAntiAlias(FilterParamsAntiAlias<T>& p,
       }*/
     }
 
-    PrintAntiAliasBuffers(std::cout, param_base.bound, param_base.out_of_bound_idx,
-                          gsl::make_span(param_base.weight_coefficients.get(), scale_buffer_size));
-
     return window_size;
   };
 
@@ -257,8 +249,6 @@ void ComputeInterpolationAtLevel1(int64_t num_channels, int64_t input_height, in
                                   concurrency::ThreadPool* tp) {
   const uint8_t* clip8_lookups = &p.GetClip8LookupTable()[640];
 
-  std::cout << "L1: ";
-
   concurrency::ThreadPool::TrySimpleParallelFor(
       tp, narrow<std::ptrdiff_t>(num_channels),
       [&](std::ptrdiff_t c) {
@@ -288,8 +278,6 @@ void ComputeInterpolationAtLevel1(int64_t num_channels, int64_t input_height, in
               output += (*Xdata_offset++) * (*weight_coeff++);
             }
 
-            std::cout << " " << output;
-
             if constexpr (is_8bit_v<InputType>) {
               *Ydata_offset++ = static_cast<InputType>(clip8_lookups[output >> 22]);
             } else if constexpr (std::is_same<InputType, int32_t>::value) {
@@ -300,8 +288,6 @@ void ComputeInterpolationAtLevel1(int64_t num_channels, int64_t input_height, in
           }
         }
       });
-
-  std::cout << std::endl;
 }
 
 /**
@@ -328,7 +314,6 @@ void ComputeInterpolationAtLevel2(int64_t num_channels, int64_t input_height, in
                                   const FilterParamsAntiAlias<AccumulateType>& p,
                                   const FilterParamsBaseAntiAlias<AccumulateType>& p_dim,
                                   concurrency::ThreadPool* tp) {
-  std::cout << "L2: ";
 
   const uint8_t* clip8_lookups = &p.GetClip8LookupTable()[640];
   // This condition is set for higher performance.
@@ -365,8 +350,6 @@ void ComputeInterpolationAtLevel2(int64_t num_channels, int64_t input_height, in
                 output += *Xdata_offset * (*weight_coeff_start++);
                 Xdata_offset += output_width;
               }
-
-              std::cout << " " << output;
 
               if constexpr (is_8bit_v<InputType>) {
                 *Ydata_offset++ = static_cast<InputType>(clip8_lookups[output >> 22]);
@@ -415,8 +398,6 @@ void ComputeInterpolationAtLevel2(int64_t num_channels, int64_t input_height, in
                 Xdata_offset += output_width;
               }
 
-              std::cout << " " << output;
-
               if constexpr (is_8bit_v<InputType>) {
                 *Ydata_offset++ = static_cast<InputType>(clip8_lookups[output >> 22]);
               } else if constexpr (std::is_same<InputType, int32_t>::value) {
@@ -428,7 +409,6 @@ void ComputeInterpolationAtLevel2(int64_t num_channels, int64_t input_height, in
           }
         });
   }
-  std::cout << std::endl;
 }
 
 template <typename InputType, typename AccumulateType>
