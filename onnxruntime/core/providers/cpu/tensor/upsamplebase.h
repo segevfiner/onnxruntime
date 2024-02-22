@@ -569,7 +569,7 @@ class UpsampleBase {
       //  we need to handle negative values
       //  it's equivalent to :x = np.clip(x, 0, 255) where x \in [-640, 639]
       // we will accept a negative x for (&table[640])[x] means table +640 -x
-      for (int i = 0; i < kLookupTableSize; ++i) {
+      for (int i = 0; i < static_cast<int>(kLookupTableSize); ++i) {
         table[i] = static_cast<uint8_t>(std::min(std::max(i - 640, 0), 255));
       }
       return table;

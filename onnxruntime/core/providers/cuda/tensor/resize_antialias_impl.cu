@@ -160,8 +160,6 @@ __global__ void _ComputeInterpolationAtLevel1(
     }
   }
 
-  //  std::cout << output << ' ';
-
   if constexpr (onnxruntime::is_8bit_v<T>) {
     const uint8_t* clip8_lookups = &clip8_table[640];
     *Ydata_offset = static_cast<T>(clip8_lookups[output >> 22]);
@@ -244,8 +242,6 @@ __global__ void _ComputeInterpolationAtLevel2(
     Xdata_offset += input_width;
   }
 
-  // std::cout << output << ' ';
-
   if constexpr (onnxruntime::is_8bit_v<T>) {
     const uint8_t* clip8_lookups = &clip8_table[640];
     *Ydata_offset = static_cast<T>(clip8_lookups[output >> 22]);
@@ -301,13 +297,13 @@ __global__ void _ComputeInterpolationAtLevel3(
     }
 
     // Extrapolate along the y dimension
-    const auto* y_outof_bounds = std::get<2>(outof_bounds_buffers);
+    const auto* y_outof_bounds = std::get<1>(outof_bounds_buffers);
     if (y_outof_bounds[static_cast<ptrdiff_t>(output_y)] != -1) {
       *Ydata_offset = static_cast<T>(extrapolation_value);
       return;
     }
 
-    // Extrapolate along the y dimension
+    // Extrapolate along the z dimension
     const int64_t* z_outof_bounds = std::get<0>(outof_bounds_buffers);
     if (z_outof_bounds != nullptr && z_outof_bounds[static_cast<ptrdiff_t>(output_z)] != -1) {
       *Ydata_offset = static_cast<T>(extrapolation_value);
@@ -335,8 +331,6 @@ __global__ void _ComputeInterpolationAtLevel3(
     }
     Xdata_offset += z_step;
   }
-
-  // std::cout << output << ' ';
 
   if constexpr (onnxruntime::is_8bit_v<T>) {
     const uint8_t* clip8_lookups = &clip8_table[640];
